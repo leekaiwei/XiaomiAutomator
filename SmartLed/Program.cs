@@ -26,40 +26,13 @@ namespace SmartLed
         {
             SystemEvents.SessionSwitch += new SessionSwitchEventHandler(DetectSessionSwitch);
 
-            Console.WriteLine("Getting sunset data...");
-
-            if (_configuration.GetValue<bool>("Testing"))
+            var tasks = new List<Task>
             {
-                timeToActivate = DateTime.UtcNow;
-            }
-            else
-            {
-                var http = new HttpClient();
-                var location = _configuration.GetSection("Location");
-                var response = await http.GetAsync("https://api.sunrise-sunset.org/json?lat=" + location.GetValue<string>("Latitude") + "&lng=" + location.GetValue<string>("Longitude"));
-                var data = JsonSerializer.Deserialize<JsonElement>(await response.Content.ReadAsStringAsync());
-                var sunsetProperty = data.GetProperty("results").GetProperty("sunset").ToString();
-                timeToActivate = DateTime.ParseExact(sunsetProperty, "h:mm:ss tt", null).AddMinutes(-30);
-            }
+                GetSunset(),
+                InitialiseDevices(),
+            };
 
-            Console.WriteLine("Active Time: {0}", timeToActivate);
-
-            foreach (var device in _configuration.GetSection("Devices").GetChildren())
-            {
-                var yeelightDevice = new GenericYeelightDevice(device["Ip"], device["Token"], device["Name"]);
-
-                bool handshaked;
-                do
-                {
-                    Console.WriteLine("Initialising...");
-                    handshaked = await yeelightDevice.MakeHandshake();
-                }
-                while (!handshaked);
-
-                _devices.Add(yeelightDevice);
-            }
-
-            Console.WriteLine("Initialised!");
+            await Task.WhenAll(tasks);
 
             if (DateTime.UtcNow >= timeToActivate)
             {
@@ -93,11 +66,14 @@ namespace SmartLed
         private static async Task TurnOn()
         {
             Console.WriteLine("Turning on...");
-            
+
+            var tasks = new List<Task>();
             foreach (var device in _devices)
             {
-                await _policy.ExecuteAsync(() => device.TurnOnSmoothly(1000));
+                tasks.Add(_policy.ExecuteAsync(() => device.TurnOnSmoothly(1000)));
             }
+
+            await Task.WhenAll(tasks);
 
             Console.WriteLine("Turned on!");
         }
@@ -111,12 +87,56 @@ namespace SmartLed
                 await Task.Delay(_configuration.GetValue<int>("Delay"));
             }
 
+            var tasks = new List<Task>();
             foreach (var device in _devices)
             {
-                await _policy.ExecuteAsync(() => device.TurnOffSmoothly(1000));
+                tasks.Add(_policy.ExecuteAsync(() => device.TurnOffSmoothly(1000)));
             }
 
+            await Task.WhenAll(tasks);
+
             Console.WriteLine("Turned off!");
+        }
+
+        private static async Task GetSunset()
+        {
+            Console.WriteLine("Getting sunset data...");
+
+            if (_configuration.GetValue<bool>("Testing"))
+            {
+                timeToActivate = DateTime.UtcNow;
+            }
+            else
+            {
+                var http = new HttpClient();
+                var location = _configuration.GetSection("Location");
+                var response = await http.GetAsync("https://api.sunrise-sunset.org/json?lat=" + location.GetValue<string>("Latitude") + "&lng=" + location.GetValue<string>("Longitude"));
+                var data = JsonSerializer.Deserialize<JsonElement>(await response.Content.ReadAsStringAsync());
+                var sunsetProperty = data.GetProperty("results").GetProperty("sunset").ToString();
+                timeToActivate = DateTime.ParseExact(sunsetProperty, "h:mm:ss tt", null).AddMinutes(-30);
+            }
+
+            Console.WriteLine("Active Time: {0}", timeToActivate);
+        }
+
+        private static async Task InitialiseDevices()
+        {
+            foreach (var device in _configuration.GetSection("Devices").GetChildren())
+            {
+                var yeelightDevice = new GenericYeelightDevice(device["Ip"], device["Token"], device["Name"]);
+
+                bool handshaked;
+                do
+                {
+                    Console.WriteLine("Initialising...");
+                    handshaked = await yeelightDevice.MakeHandshake();
+                }
+                while (!handshaked);
+
+                _devices.Add(yeelightDevice);
+            }
+
+            Console.WriteLine("Initialised!");
         }
     }
 }
