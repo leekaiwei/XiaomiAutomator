@@ -1,6 +1,6 @@
 # XiaomiAutomator
 
-Allows automation of Xiaomi devices from PC. Uses https://github.com/Koli96/Miio.NET to communicate with devices. Getting device tokens is possible via https://github.com/Maxmudjon/Get_MiHome_devices_token/tree/1.0.2.
+Allows automation of Xiaomi devices from PC. Uses https://github.com/Koli96/Miio.NET to communicate with devices. Getting device tokens is possible via https://github.com/Maxmudjon/Get_MiHome_devices_token.
 
 ## Current Functionality
 
